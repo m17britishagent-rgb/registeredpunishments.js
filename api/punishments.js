@@ -1,6 +1,4 @@
-
 export default async function handler(req, res) {
-  // Only allow GET requests
   if (req.method !== "GET") {
     return res.status(405).json({
       status: "error",
@@ -9,54 +7,52 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get username from request
-    const username = req.query.username;
+    const username = req.query.username?.trim();
 
-    if (!username || !username.trim()) {
+    if (!username) {
       return res.status(400).json({
         status: "error",
-        message: "Username is required"
+        message: "Username is required."
       });
     }
 
-    // Get Google Apps Script URL from Vercel environment variables
-    const googleApi = process.env.GOOGLE_PUNISHMENT_API;
+    // Your Google Apps Script URL
+    const GOOGLE_API =
+      "https://script.google.com/macros/s/AKfycbxEFGA5CCM7fI1hMPiVnwbLi16AvsAkc1BGkfDu0rAZuXCp2FGVWlM0epzvqaNfg3c-/exec";
 
-    if (!googleApi) {
-      throw new Error("Google API URL is not configured");
-    }
+    const url = new URL(GOOGLE_API);
+    url.searchParams.set("username", username);
 
-    // Add username to Google API request
-    const url = new URL(googleApi);
-    url.searchParams.set("username", username.trim());
-
-    // Fetch punishment history
     const response = await fetch(url.toString());
 
     if (!response.ok) {
-      throw new Error(`Google API returned HTTP ${response.status}`);
+      throw new Error(`Google API error: ${response.status}`);
     }
 
     const result = await response.json();
 
     if (result.status !== "success") {
-      throw new Error(result.message || "Google API error");
+      throw new Error(result.message || "Google API failed.");
     }
 
-    // Return only the requested user's records
+    const records = (result.data || []).filter(record =>
+      String(record.username || "").trim().toLowerCase() ===
+      username.toLowerCase()
+    );
+
     return res.status(200).json({
       status: "success",
-      username: username.trim(),
-      count: result.count,
-      data: result.data
+      username: username,
+      count: records.length,
+      data: records
     });
 
   } catch (error) {
-    console.error("Punishment API error:", error);
+    console.error(error);
 
     return res.status(500).json({
       status: "error",
-      message: "Unable to retrieve punishment history"
+      message: error.message
     });
   }
 }
